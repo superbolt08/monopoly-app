@@ -10,6 +10,7 @@ interface GameStore {
   setGameState: (state: GameState) => void;
   dispatch: (action: GameAction) => Promise<ActionResult>;
   clearError: () => void;
+  quitGame: () => void;
 }
 
 export const useGameStore = create<GameStore>()(
@@ -37,6 +38,11 @@ export const useGameStore = create<GameStore>()(
         return result;
       },
       clearError: () => set({ error: null }),
+      quitGame: () => {
+        if (confirm('Are you sure you want to quit? The game will be saved and you can resume later.')) {
+          set({ gameState: null, error: null });
+        }
+      },
     }),
     {
       name: 'monopoly-game-storage',

@@ -12,6 +12,7 @@ export default function Dashboard() {
   const gameState = useGameStore((state) => state.gameState);
   const dispatch = useGameStore((state) => state.dispatch);
   const error = useGameStore((state) => state.error);
+  const quitGame = useGameStore((state) => state.quitGame);
   const [showPropertyManager, setShowPropertyManager] = useState(false);
   const [showTrade, setShowTrade] = useState(false);
 
@@ -45,12 +46,20 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold">Monopoly Bank + Game Manager</h1>
             <p className="text-sm text-gray-600">Turn {gameState.turnNumber} - Player {gameState.currentTurnIndex + 1}</p>
           </div>
-          <button
-            onClick={handleExport}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          >
-            Export Game
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleExport}
+              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            >
+              Export Game
+            </button>
+            <button
+              onClick={quitGame}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+            >
+              Quit Game
+            </button>
+          </div>
         </div>
 
         {/* Current Turn Banner */}
