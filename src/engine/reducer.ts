@@ -434,16 +434,23 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       }
 
       case 'TRAIN_EVENT_TRIGGER': {
-        // Randomly select a property
-        const randomIndex = Math.floor(Math.random() * PROPERTIES.length);
-        const selectedProperty = PROPERTIES[randomIndex];
-        newState.trainEventProperty = selectedProperty.id;
-        transaction = createTransaction('TRAIN_EVENT', `Train Event: Selected property ${selectedProperty.name}`, null, currentPlayer.id);
+        // Start the spinner - don't select a property yet
+        // Use empty string to indicate spinner is active (distinct from null/undefined)
+        newState.trainEventProperty = '';
+        transaction = createTransaction('TRAIN_EVENT', `Train Event: Spinner started`, null, currentPlayer.id);
+        break;
+      }
+
+      case 'TRAIN_EVENT_STOP': {
+        // Stop the spinner and select the property
+        newState.trainEventProperty = action.propertyId;
+        const propData = getPropertyData(newState, action.propertyId);
+        transaction = createTransaction('TRAIN_EVENT', `Train Event: Stopped on ${propData?.name || action.propertyId}`, null, currentPlayer.id);
         break;
       }
 
       case 'TRAIN_EVENT_BUY': {
-        if (!newState.trainEventProperty) {
+        if (!newState.trainEventProperty || newState.trainEventProperty === '') {
           return { success: false, error: 'No train event property selected' };
         }
         // Use the same logic as BUY_PROPERTY
@@ -478,7 +485,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       }
 
       case 'TRAIN_EVENT_SKIP': {
-        if (!newState.trainEventProperty) {
+        if (!newState.trainEventProperty || newState.trainEventProperty === '') {
           return { success: false, error: 'No train event property selected' };
         }
         const propData = getPropertyData(newState, newState.trainEventProperty);
@@ -488,7 +495,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       }
 
       case 'TRAIN_EVENT_PAY_RENT': {
-        if (!newState.trainEventProperty) {
+        if (!newState.trainEventProperty || newState.trainEventProperty === '') {
           return { success: false, error: 'No train event property selected' };
         }
         const propState = getPropertyState(newState, action.propertyId);

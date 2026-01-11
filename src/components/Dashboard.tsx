@@ -126,7 +126,7 @@ export default function Dashboard() {
         />
       )}
 
-      {gameState.trainEventProperty && (
+      {(gameState.trainEventProperty === '' || (gameState.trainEventProperty && gameState.trainEventProperty !== null)) && (
         <TrainEventModal
           gameState={gameState}
           onClose={() => {

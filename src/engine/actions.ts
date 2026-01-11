@@ -20,6 +20,7 @@ export type GameAction =
   | { type: 'MANUAL_OWNERSHIP'; propertyId: string; ownerId: string | null }
   | { type: 'UNDO_LAST' }
   | { type: 'TRAIN_EVENT_TRIGGER' }
+  | { type: 'TRAIN_EVENT_STOP'; propertyId: string }
   | { type: 'TRAIN_EVENT_BUY'; propertyId: string; price: number }
   | { type: 'TRAIN_EVENT_SKIP' }
   | { type: 'TRAIN_EVENT_PAY_RENT'; propertyId: string; amount: number }
