@@ -1,0 +1,79 @@
+import { useGameStore } from '../store/gameStore';
+import type { GameState } from '../types';
+
+interface HomeProps {
+  onNewGame: () => void;
+}
+
+export default function Home({ onNewGame }: HomeProps) {
+  const setGameState = useGameStore((state) => state.setGameState);
+
+  const handleLoadFromJSON = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const state = JSON.parse(event.target?.result as string) as GameState;
+            setGameState(state);
+          } catch (error) {
+            alert('Failed to load game: ' + (error as Error).message);
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleResumeLast = () => {
+    // Game state is already persisted, just check if it exists
+    const stored = localStorage.getItem('monopoly-game-storage');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.state?.gameState) {
+          setGameState(parsed.state.gameState);
+        } else {
+          alert('No saved game found');
+        }
+      } catch (error) {
+        alert('Failed to resume game: ' + (error as Error).message);
+      }
+    } else {
+      alert('No saved game found');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+        <h1 className="text-3xl font-bold text-center mb-8">Monopoly Bank + Game Manager</h1>
+        <div className="space-y-4">
+          <button
+            onClick={onNewGame}
+            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition"
+          >
+            New Game
+          </button>
+          <button
+            onClick={handleLoadFromJSON}
+            className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition"
+          >
+            Load from JSON
+          </button>
+          <button
+            onClick={handleResumeLast}
+            className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition"
+          >
+            Resume Last Game
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
