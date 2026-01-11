@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { GameState } from '../types';
 import type { GameAction } from '../engine/actions';
 import { getCurrentPlayer, getPlayerProperties, getPropertyData } from '../engine/utils';
-import { BOARD_DEFINITION } from '../data/board';
 
 interface TradeModalProps {
   gameState: GameState;
@@ -17,8 +16,6 @@ export default function TradeModal({ gameState, onClose, onAction }: TradeModalP
   const [cashTo, setCashTo] = useState(0);
   const [propertiesFrom, setPropertiesFrom] = useState<string[]>([]);
   const [propertiesTo, setPropertiesTo] = useState<string[]>([]);
-  const [cardsFrom, setCardsFrom] = useState<{ type: 'CHANCE' | 'COMMUNITY_CHEST' }[]>([]);
-  const [cardsTo, setCardsTo] = useState<{ type: 'CHANCE' | 'COMMUNITY_CHEST' }[]>([]);
 
   const otherPlayers = gameState.players.filter(p => p.id !== currentPlayer.id && !p.isBankrupt);
   const currentPlayerProps = getPlayerProperties(gameState, currentPlayer.id);
@@ -41,26 +38,6 @@ export default function TradeModal({ gameState, onClose, onAction }: TradeModalP
     }
   };
 
-  const toggleCard = (cardType: 'CHANCE' | 'COMMUNITY_CHEST', from: boolean) => {
-    if (from) {
-      setCardsFrom(prev => {
-        const index = prev.findIndex(c => c.type === cardType);
-        if (index >= 0) {
-          return prev.filter((_, i) => i !== index);
-        }
-        return [...prev, { type: cardType }];
-      });
-    } else {
-      setCardsTo(prev => {
-        const index = prev.findIndex(c => c.type === cardType);
-        if (index >= 0) {
-          return prev.filter((_, i) => i !== index);
-        }
-        return [...prev, { type: cardType }];
-      });
-    }
-  };
-
   const handleExecute = () => {
     if (!toPlayerId) {
       alert('Select a player to trade with');
@@ -75,8 +52,6 @@ export default function TradeModal({ gameState, onClose, onAction }: TradeModalP
       cashTo,
       propertiesFrom,
       propertiesTo,
-      cardsFrom,
-      cardsTo,
     });
     onClose();
   };
@@ -128,7 +103,7 @@ export default function TradeModal({ gameState, onClose, onAction }: TradeModalP
                   <label className="block text-sm">Properties:</label>
                   <div className="max-h-32 overflow-y-auto border rounded p-2">
                     {currentPlayerProps.map(prop => {
-                      const propData = getPropertyData(prop.propertyId);
+                      const propData = getPropertyData(gameState, prop.propertyId);
                       return propData ? (
                         <label key={prop.propertyId} className="flex items-center gap-2 text-sm">
                           <input
@@ -141,29 +116,6 @@ export default function TradeModal({ gameState, onClose, onAction }: TradeModalP
                       ) : null;
                     })}
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm">Get Out of Jail Free Cards:</label>
-                  {currentPlayer.getOutOfJailFreeChance && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={cardsFrom.some(c => c.type === 'CHANCE')}
-                        onChange={() => toggleCard('CHANCE', true)}
-                      />
-                      Chance
-                    </label>
-                  )}
-                  {currentPlayer.getOutOfJailFreeChest && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={cardsFrom.some(c => c.type === 'COMMUNITY_CHEST')}
-                        onChange={() => toggleCard('COMMUNITY_CHEST', true)}
-                      />
-                      Community Chest
-                    </label>
-                  )}
                 </div>
               </div>
             </div>
@@ -186,7 +138,7 @@ export default function TradeModal({ gameState, onClose, onAction }: TradeModalP
                   <label className="block text-sm">Properties:</label>
                   <div className="max-h-32 overflow-y-auto border rounded p-2">
                     {toPlayerProps.map(prop => {
-                      const propData = getPropertyData(prop.propertyId);
+                      const propData = getPropertyData(gameState, prop.propertyId);
                       return propData ? (
                         <label key={prop.propertyId} className="flex items-center gap-2 text-sm">
                           <input
@@ -199,29 +151,6 @@ export default function TradeModal({ gameState, onClose, onAction }: TradeModalP
                       ) : null;
                     })}
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm">Get Out of Jail Free Cards:</label>
-                  {toPlayer?.getOutOfJailFreeChance && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={cardsTo.some(c => c.type === 'CHANCE')}
-                        onChange={() => toggleCard('CHANCE', false)}
-                      />
-                      Chance
-                    </label>
-                  )}
-                  {toPlayer?.getOutOfJailFreeChest && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={cardsTo.some(c => c.type === 'COMMUNITY_CHEST')}
-                        onChange={() => toggleCard('COMMUNITY_CHEST', false)}
-                      />
-                      Community Chest
-                    </label>
-                  )}
                 </div>
               </div>
             </div>

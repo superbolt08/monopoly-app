@@ -8,12 +8,12 @@ function App() {
   const gameState = useGameStore((state) => state.gameState);
   const [showSetup, setShowSetup] = useState(false);
 
-  if (!gameState) {
-    return <Home onNewGame={() => setShowSetup(true)} />;
-  }
-
   if (showSetup) {
     return <Setup onComplete={() => setShowSetup(false)} />;
+  }
+
+  if (!gameState) {
+    return <Home onNewGame={() => setShowSetup(true)} />;
   }
 
   return <Dashboard />;

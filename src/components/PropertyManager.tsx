@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import type { GameState } from '../types';
 import type { GameAction } from '../engine/actions';
-import { BOARD_DEFINITION } from '../data/board';
-import { getPropertyState, getPropertyData, canBuildHouse, canBuildHotel, calculateRent } from '../engine/utils';
-import { getCurrentPlayer } from '../engine/utils';
+import { PROPERTIES } from '../data/properties';
+import { getPropertyState, getPropertyData, getCurrentPlayer } from '../engine/utils';
 
 interface PropertyManagerProps {
   gameState: GameState;
@@ -16,15 +15,11 @@ export default function PropertyManager({ gameState, onClose, onAction }: Proper
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
   const currentPlayer = getCurrentPlayer(gameState);
 
-  const properties = BOARD_DEFINITION.spaces
-    .filter(s => s.propertyData)
-    .map(s => s.propertyData!);
-
-  const filteredProperties = properties.filter(p =>
+  const filteredProperties = PROPERTIES.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const selectedPropData = selectedProperty ? getPropertyData(selectedProperty) : null;
+  const selectedPropData = selectedProperty ? getPropertyData(gameState, selectedProperty) : null;
   const selectedPropState = selectedProperty ? getPropertyState(gameState, selectedProperty) : null;
 
   return (
@@ -68,10 +63,11 @@ export default function PropertyManager({ gameState, onClose, onAction }: Proper
                     >
                       <div className="font-semibold text-sm">{prop.name}</div>
                       <div className="text-xs text-gray-600">
-                        ${prop.price} | {owner ? owner.name : 'Unowned'}
+                        {state?.ownerId ? `Owner: ${owner?.name || 'Unknown'}` : 'Unowned'}
                         {state?.mortgaged && ' (M)'}
-                        {state?.houses > 0 && ` (${state.houses}H)`}
+                        {state && state.houses > 0 && ` (${state.houses}H)`}
                         {state?.hotel && ' (Hotel)'}
+                        {prop.price > 0 && ` | $${prop.price}`}
                       </div>
                     </div>
                   );
@@ -85,15 +81,13 @@ export default function PropertyManager({ gameState, onClose, onAction }: Proper
                 <div className="space-y-2">
                   <div>
                     <p className="font-semibold">{selectedPropData.name}</p>
-                    <p className="text-sm text-gray-600">Price: ${selectedPropData.price}</p>
+                    <p className="text-sm text-gray-600">Price: ${selectedPropData.price || 'Not set'}</p>
                     <p className="text-sm text-gray-600">Owner: {selectedPropState.ownerId ? gameState.players.find(p => p.id === selectedPropState.ownerId)?.name : 'None'}</p>
                     <p className="text-sm text-gray-600">Mortgaged: {selectedPropState.mortgaged ? 'Yes' : 'No'}</p>
                     <p className="text-sm text-gray-600">Houses: {selectedPropState.houses}</p>
                     <p className="text-sm text-gray-600">Hotel: {selectedPropState.hotel ? 'Yes' : 'No'}</p>
-                    {selectedPropState.ownerId && (
-                      <p className="text-sm text-gray-600">
-                        Current Rent: ${calculateRent(gameState, selectedPropData.id, gameState.lastDiceRoll || undefined)}
-                      </p>
+                    {selectedPropData.mortgageValue > 0 && (
+                      <p className="text-sm text-gray-600">Mortgage Value: ${selectedPropData.mortgageValue}</p>
                     )}
                   </div>
 
@@ -102,14 +96,17 @@ export default function PropertyManager({ gameState, onClose, onAction }: Proper
                       <>
                         {!selectedPropState.mortgaged && (
                           <>
-                            {canBuildHouse(gameState, selectedPropData.id, currentPlayer.id) && (
+                            {selectedPropState.houses < 4 && (
                               <button
                                 onClick={() => {
-                                  onAction({ type: 'BUY_HOUSE', propertyId: selectedPropData.id });
+                                  const cost = prompt('Enter house cost:');
+                                  if (cost) {
+                                    onAction({ type: 'BUY_HOUSE', propertyId: selectedPropData.id, cost: parseInt(cost) || 0 });
+                                  }
                                 }}
                                 className="w-full bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
                               >
-                                Buy House (${selectedPropData.houseCost})
+                                Buy House
                               </button>
                             )}
                             {selectedPropState.houses > 0 && (
@@ -119,17 +116,20 @@ export default function PropertyManager({ gameState, onClose, onAction }: Proper
                                 }}
                                 className="w-full bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700"
                               >
-                                Sell House (${Math.floor(selectedPropData.houseCost / 2)})
+                                Sell House
                               </button>
                             )}
-                            {canBuildHotel(gameState, selectedPropData.id, currentPlayer.id) && (
+                            {selectedPropState.houses === 4 && !selectedPropState.hotel && (
                               <button
                                 onClick={() => {
-                                  onAction({ type: 'BUY_HOTEL', propertyId: selectedPropData.id });
+                                  const cost = prompt('Enter hotel cost:');
+                                  if (cost) {
+                                    onAction({ type: 'BUY_HOTEL', propertyId: selectedPropData.id, cost: parseInt(cost) || 0 });
+                                  }
                                 }}
                                 className="w-full bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
                               >
-                                Buy Hotel (${selectedPropData.hotelCost})
+                                Buy Hotel
                               </button>
                             )}
                             {selectedPropState.hotel && (
@@ -139,7 +139,7 @@ export default function PropertyManager({ gameState, onClose, onAction }: Proper
                                 }}
                                 className="w-full bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700"
                               >
-                                Sell Hotel (${Math.floor(selectedPropData.hotelCost / 2)})
+                                Sell Hotel
                               </button>
                             )}
                             <button
@@ -148,7 +148,7 @@ export default function PropertyManager({ gameState, onClose, onAction }: Proper
                               }}
                               className="w-full bg-orange-600 text-white px-3 py-1 rounded text-sm hover:bg-orange-700"
                             >
-                              Mortgage (${selectedPropData.mortgageValue})
+                              Mortgage
                             </button>
                           </>
                         )}
@@ -159,20 +159,10 @@ export default function PropertyManager({ gameState, onClose, onAction }: Proper
                             }}
                             className="w-full bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
                           >
-                            Unmortgage (${Math.floor(selectedPropData.mortgageValue * (1 + gameState.settings.mortgageInterestRate))})
+                            Unmortgage
                           </button>
                         )}
                       </>
-                    )}
-                    {!selectedPropState.ownerId && currentPlayer.position === BOARD_DEFINITION.spaces.find(s => s.propertyData?.id === selectedPropData.id)?.position && (
-                      <button
-                        onClick={() => {
-                          onAction({ type: 'BUY_PROPERTY', propertyId: selectedPropData.id });
-                        }}
-                        className="w-full bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-                      >
-                        Buy Property (${selectedPropData.price})
-                      </button>
                     )}
                   </div>
                 </div>

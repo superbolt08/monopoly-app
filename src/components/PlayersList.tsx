@@ -25,10 +25,7 @@ export default function PlayersList({ gameState }: PlayersListProps) {
               <div>
                 <p className="font-semibold">{player.name}</p>
                 <p className="text-sm text-gray-600">Balance: ${player.balance}</p>
-                <p className="text-sm text-gray-600">Position: {player.position}</p>
-                {player.inJail && (
-                  <p className="text-sm text-yellow-600">In Jail</p>
-                )}
+                <p className="text-sm text-gray-600">Properties: {player.ownedPropertyIds.length}</p>
                 {player.isBankrupt && (
                   <p className="text-sm text-red-600">Bankrupt</p>
                 )}
@@ -37,12 +34,6 @@ export default function PlayersList({ gameState }: PlayersListProps) {
                 <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded">Current</span>
               )}
             </div>
-            {(player.getOutOfJailFreeChance || player.getOutOfJailFreeChest) && (
-              <div className="mt-2 text-xs">
-                {player.getOutOfJailFreeChance && <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded mr-1">Chance Card</span>}
-                {player.getOutOfJailFreeChest && <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded">Chest Card</span>}
-              </div>
-            )}
           </div>
         ))}
       </div>

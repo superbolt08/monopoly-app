@@ -1,21 +1,10 @@
 import type { GameState, GameAction, ActionResult, Transaction, Player, PropertyState } from '../types';
-import { BOARD_DEFINITION } from '../data/board';
-import { CHANCE_CARDS, COMMUNITY_CHEST_CARDS } from '../data/cards';
 import {
   generateId,
-  rollDice,
-  isDoubles,
   getCurrentPlayer,
-  getSpaceAtPosition,
-  getPropertyData,
   getPropertyState,
+  getPropertyData,
   getPlayerProperties,
-  calculateRent,
-  hasMonopoly,
-  canBuildHouse,
-  canBuildHotel,
-  findNearestRailroad,
-  findNearestUtility,
   createTransaction,
   cloneState,
 } from './utils';
@@ -34,356 +23,65 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
     let transaction: Transaction | null = null;
 
     switch (action.type) {
-      case 'ROLL_DICE': {
-        if (newState.phase !== 'NORMAL' && newState.phase !== 'IN_JAIL_DECISION') {
-          return { success: false, error: 'Cannot roll dice in current phase' };
-        }
-
-        const dice = action.dice || rollDice();
-        newState.lastDiceRoll = dice;
-
-        if (currentPlayer.inJail) {
-          // Jail roll attempt
-          if (isDoubles(dice)) {
-            currentPlayer.inJail = false;
-            currentPlayer.jailTurns = 0;
-            currentPlayer.position = 10; // Just Visiting
-            newState.phase = 'NORMAL';
-            transaction = createTransaction('JAIL_ROLL_ATTEMPT', `Rolled doubles (${dice[0]}, ${dice[1]}). Released from jail.`);
-          } else {
-            currentPlayer.jailTurns += 1;
-            if (currentPlayer.jailTurns >= 3) {
-              // Must pay fine
-              if (currentPlayer.balance >= newState.settings.jailFine) {
-                currentPlayer.balance -= newState.settings.jailFine;
-                currentPlayer.inJail = false;
-                currentPlayer.jailTurns = 0;
-                currentPlayer.position = 10;
-                newState.phase = 'NORMAL';
-                transaction = createTransaction('JAIL_ROLL_ATTEMPT', `Failed 3rd attempt. Paid $${newState.settings.jailFine} fine.`, -newState.settings.jailFine, currentPlayer.id, 'BANK');
-              } else {
-                return { success: false, error: 'Insufficient funds to pay jail fine' };
-              }
-            } else {
-              transaction = createTransaction('JAIL_ROLL_ATTEMPT', `Rolled ${dice[0]}, ${dice[1]}. Still in jail (${currentPlayer.jailTurns}/3).`);
-            }
-          }
-        } else {
-          // Normal roll
-          const spaces = dice[0] + dice[1];
-          const oldPosition = currentPlayer.position;
-          currentPlayer.position = (currentPlayer.position + spaces) % 40;
-
-          // Check if passed GO
-          if (currentPlayer.position < oldPosition) {
-            currentPlayer.balance += newState.settings.passGoAmount;
-            newState.log.push(createTransaction('PASS_GO', `Passed GO. Collected $${newState.settings.passGoAmount}.`, newState.settings.passGoAmount, 'BANK', currentPlayer.id));
-          }
-
-          transaction = createTransaction('ROLL_DICE', `Rolled ${dice[0]}, ${dice[1]}. Moved ${spaces} spaces.`, null, currentPlayer.id);
-          
-          // Handle landing
-          const space = getSpaceAtPosition(currentPlayer.position);
-          if (space.type === 'GO_TO_JAIL') {
-            currentPlayer.position = 10;
-            currentPlayer.inJail = true;
-            currentPlayer.jailTurns = 0;
-            newState.phase = 'IN_JAIL_DECISION';
-            newState.log.push(createTransaction('GO_TO_JAIL', 'Landed on Go To Jail.', null, currentPlayer.id));
-          } else if (space.type === 'CHANCE' || space.type === 'COMMUNITY_CHEST') {
-            newState.phase = 'CARD_DRAW';
-          } else if (space.type === 'TAX') {
-            const taxAmount = space.name === 'Income Tax' ? 200 : 100;
-            newState.phase = 'NORMAL';
-            // Will be handled by PAY_TAX action
-          } else if (space.type === 'PROPERTY' || space.type === 'RAILROAD' || space.type === 'UTILITY') {
-            const propState = getPropertyState(newState, space.propertyData!.id);
-            if (propState && propState.ownerId && propState.ownerId !== currentPlayer.id && !propState.mortgaged) {
-              // Need to pay rent
-              newState.phase = 'NORMAL';
-              // Will be handled by PAY_RENT action
-            } else if (!propState || !propState.ownerId) {
-              // Can buy
-              newState.phase = 'NORMAL';
-            } else {
-              newState.phase = 'NORMAL';
-            }
-          } else {
-            newState.phase = 'NORMAL';
-          }
-        }
-
-        break;
-      }
-
-      case 'MOVE_PLAYER': {
-        const oldPosition = currentPlayer.position;
-        currentPlayer.position = (currentPlayer.position + action.spaces) % 40;
-        
-        if (currentPlayer.position < oldPosition) {
-          currentPlayer.balance += newState.settings.passGoAmount;
-          newState.log.push(createTransaction('PASS_GO', `Passed GO. Collected $${newState.settings.passGoAmount}.`, newState.settings.passGoAmount, 'BANK', currentPlayer.id));
-        }
-
-        transaction = createTransaction('MOVE_PLAYER', `Moved ${action.spaces} spaces.`, null, currentPlayer.id);
-        break;
-      }
-
       case 'BUY_PROPERTY': {
-        const space = getSpaceAtPosition(currentPlayer.position);
-        if (!space.propertyData) {
-          return { success: false, error: 'Current space is not a property' };
-        }
-
-        const propertyId = space.propertyData.id;
-        const existingState = getPropertyState(newState, propertyId);
+        const existingState = getPropertyState(newState, action.propertyId);
         
         if (existingState && existingState.ownerId) {
           return { success: false, error: 'Property already owned' };
         }
 
-        if (currentPlayer.balance < space.propertyData.price) {
+        if (currentPlayer.balance < action.price) {
           return { success: false, error: 'Insufficient funds' };
         }
 
-        currentPlayer.balance -= space.propertyData.price;
-        currentPlayer.ownedPropertyIds.push(propertyId);
+        // Update property data with price
+        if (newState.propertyData[action.propertyId]) {
+          newState.propertyData[action.propertyId].price = action.price;
+          newState.propertyData[action.propertyId].mortgageValue = Math.floor(action.price * 0.5);
+        }
 
-        if (!newState.propertyStates[propertyId]) {
-          newState.propertyStates[propertyId] = {
-            propertyId,
+        currentPlayer.balance -= action.price;
+        currentPlayer.ownedPropertyIds.push(action.propertyId);
+
+        if (!newState.propertyStates[action.propertyId]) {
+          newState.propertyStates[action.propertyId] = {
+            propertyId: action.propertyId,
             ownerId: currentPlayer.id,
             mortgaged: false,
             houses: 0,
             hotel: false,
           };
         } else {
-          newState.propertyStates[propertyId].ownerId = currentPlayer.id;
+          newState.propertyStates[action.propertyId].ownerId = currentPlayer.id;
         }
 
-        transaction = createTransaction('BUY_PROPERTY', `Bought ${space.propertyData.name} for $${space.propertyData.price}.`, -space.propertyData.price, currentPlayer.id, 'BANK', propertyId);
-        newState.phase = 'NORMAL';
+        const propData = getPropertyData(newState, action.propertyId);
+        transaction = createTransaction('BUY_PROPERTY', `Bought ${propData?.name || action.propertyId} for $${action.price}.`, -action.price, currentPlayer.id, 'BANK', action.propertyId);
         break;
       }
 
-      case 'SKIP_PURCHASE': {
-        newState.phase = 'NORMAL';
-        break;
-      }
+      case 'COLLECT_RENT': {
+        const fromPlayer = newState.players.find(p => p.id === action.fromPlayerId);
+        const toPlayer = newState.players.find(p => p.id === action.toPlayerId);
 
-      case 'PAY_RENT': {
-        const space = getSpaceAtPosition(currentPlayer.position);
-        if (!space.propertyData) {
-          return { success: false, error: 'Current space is not a property' };
+        if (!fromPlayer || !toPlayer) {
+          return { success: false, error: 'Player not found' };
         }
 
-        const propertyId = space.propertyData.id;
-        const propState = getPropertyState(newState, propertyId);
-        
-        if (!propState || !propState.ownerId || propState.ownerId === currentPlayer.id || propState.mortgaged) {
-          return { success: false, error: 'No rent to pay' };
+        if (fromPlayer.isBankrupt || toPlayer.isBankrupt) {
+          return { success: false, error: 'Cannot collect rent from bankrupt player' };
         }
 
-        const rent = calculateRent(newState, propertyId, newState.lastDiceRoll || undefined);
-        if (rent === 0 && (space.type === 'UTILITY' || space.type === 'RAILROAD')) {
-          return { success: false, error: 'Need dice roll to calculate rent' };
-        }
-
-        if (currentPlayer.balance < rent) {
+        if (toPlayer.balance < action.amount) {
           return { success: false, error: 'Insufficient funds to pay rent' };
         }
 
-        const owner = newState.players.find(p => p.id === propState.ownerId);
-        if (!owner) {
-          return { success: false, error: 'Owner not found' };
-        }
+        toPlayer.balance -= action.amount;
+        fromPlayer.balance += action.amount;
 
-        currentPlayer.balance -= rent;
-        owner.balance += rent;
-
-        transaction = createTransaction('PAY_RENT', `Paid $${rent} rent for ${space.propertyData.name}.`, -rent, currentPlayer.id, owner.id, propertyId);
-        newState.phase = 'NORMAL';
-        break;
-      }
-
-      case 'PAY_TAX': {
-        if (currentPlayer.balance < action.amount) {
-          return { success: false, error: 'Insufficient funds' };
-        }
-
-        currentPlayer.balance -= action.amount;
-        if (newState.settings.freeParkingPot) {
-          newState.freeParkingPot += action.amount;
-        }
-
-        transaction = createTransaction('PAY_TAX', `Paid $${action.amount} tax.`, -action.amount, currentPlayer.id, 'BANK');
-        newState.phase = 'NORMAL';
-        break;
-      }
-
-      case 'DRAW_CARD': {
-        const deck = action.deckType === 'CHANCE' ? newState.chanceDeck : newState.chestDeck;
-        const discard = action.deckType === 'CHANCE' ? newState.chanceDiscard : newState.chestDiscard;
-
-        if (deck.length === 0) {
-          // Reshuffle
-          const allCards = action.deckType === 'CHANCE' ? CHANCE_CARDS : COMMUNITY_CHEST_CARDS;
-          if (discard.length === 0) {
-            return { success: false, error: 'No cards available' };
-          }
-          const shuffled = [...discard].sort(() => Math.random() - 0.5);
-          if (action.deckType === 'CHANCE') {
-            newState.chanceDeck = shuffled;
-            newState.chanceDiscard = [];
-          } else {
-            newState.chestDeck = shuffled;
-            newState.chestDiscard = [];
-          }
-        }
-
-        const currentDeck = action.deckType === 'CHANCE' ? newState.chanceDeck : newState.chestDeck;
-        const currentDiscard = action.deckType === 'CHANCE' ? newState.chanceDiscard : newState.chestDiscard;
-        
-        const card = currentDeck.shift()!;
-        currentDiscard.push(card);
-
-        transaction = createTransaction('DRAW_CARD', `Drew card: ${card.text}`, null, currentPlayer.id, null, null, card.id);
-        newState.phase = 'CARD_DRAW';
-        break;
-      }
-
-      case 'APPLY_CARD_EFFECT': {
-        const card = [...newState.chanceDeck, ...newState.chanceDiscard, ...newState.chestDeck, ...newState.chestDiscard].find(c => c.id === action.cardId);
-        if (!card) {
-          return { success: false, error: 'Card not found' };
-        }
-
-        if (!action.accept) {
-          newState.phase = 'NORMAL';
-          (newState as any).drawnCard = null;
-          return { success: true, state: newState };
-        }
-
-        const effect = card.effect;
-        let effectTransaction: Transaction | null = null;
-
-        if (effect.type === 'MONEY') {
-          currentPlayer.balance += effect.amount || 0;
-          effectTransaction = createTransaction('APPLY_CARD_EFFECT', `Card effect: ${card.text}`, effect.amount || 0, effect.amount && effect.amount < 0 ? currentPlayer.id : 'BANK', effect.amount && effect.amount > 0 ? currentPlayer.id : 'BANK', null, card.id);
-        } else if (effect.type === 'MOVE_TO') {
-          const oldPosition = currentPlayer.position;
-          currentPlayer.position = effect.targetPosition!;
-          if (currentPlayer.position < oldPosition && effect.targetPosition !== 0) {
-            currentPlayer.balance += newState.settings.passGoAmount;
-            newState.log.push(createTransaction('PASS_GO', `Passed GO. Collected $${newState.settings.passGoAmount}.`, newState.settings.passGoAmount, 'BANK', currentPlayer.id));
-          }
-          if (effect.targetPosition === 10) {
-            currentPlayer.inJail = true;
-            currentPlayer.jailTurns = 0;
-            newState.phase = 'IN_JAIL_DECISION';
-          }
-          effectTransaction = createTransaction('APPLY_CARD_EFFECT', `Card effect: ${card.text}`, null, currentPlayer.id, null, null, card.id);
-        } else if (effect.type === 'GET_OUT_OF_JAIL') {
-          if (card.deckType === 'CHANCE') {
-            currentPlayer.getOutOfJailFreeChance = true;
-          } else {
-            currentPlayer.getOutOfJailFreeChest = true;
-          }
-          effectTransaction = createTransaction('APPLY_CARD_EFFECT', `Card effect: ${card.text}`, null, currentPlayer.id, null, null, card.id);
-        } else if (effect.type === 'ADVANCE_TO_RAILROAD') {
-          const targetPos = findNearestRailroad(currentPlayer.position);
-          const oldPosition = currentPlayer.position;
-          currentPlayer.position = targetPos;
-          if (currentPlayer.position < oldPosition) {
-            currentPlayer.balance += newState.settings.passGoAmount;
-            newState.log.push(createTransaction('PASS_GO', `Passed GO. Collected $${newState.settings.passGoAmount}.`, newState.settings.passGoAmount, 'BANK', currentPlayer.id));
-          }
-          effectTransaction = createTransaction('APPLY_CARD_EFFECT', `Card effect: ${card.text}`, null, currentPlayer.id, null, null, card.id);
-        } else if (effect.type === 'ADVANCE_TO_UTILITY') {
-          const targetPos = findNearestUtility(currentPlayer.position);
-          const oldPosition = currentPlayer.position;
-          currentPlayer.position = targetPos;
-          if (currentPlayer.position < oldPosition) {
-            currentPlayer.balance += newState.settings.passGoAmount;
-            newState.log.push(createTransaction('PASS_GO', `Passed GO. Collected $${newState.settings.passGoAmount}.`, newState.settings.passGoAmount, 'BANK', currentPlayer.id));
-          }
-          effectTransaction = createTransaction('APPLY_CARD_EFFECT', `Card effect: ${card.text}`, null, currentPlayer.id, null, null, card.id);
-        } else if (effect.type === 'GO_BACK_3') {
-          currentPlayer.position = (currentPlayer.position - 3 + 40) % 40;
-          effectTransaction = createTransaction('APPLY_CARD_EFFECT', `Card effect: ${card.text}`, null, currentPlayer.id, null, null, card.id);
-        } else if (effect.type === 'REPAIRS') {
-          const playerProps = getPlayerProperties(newState, currentPlayer.id);
-          let totalCost = 0;
-          for (const prop of playerProps) {
-            if (prop.hotel) {
-              totalCost += effect.perHotel || 0;
-            } else {
-              totalCost += (effect.perHouse || 0) * prop.houses;
-            }
-          }
-          if (currentPlayer.balance < totalCost) {
-            return { success: false, error: 'Insufficient funds for repairs' };
-          }
-          currentPlayer.balance -= totalCost;
-          effectTransaction = createTransaction('APPLY_CARD_EFFECT', `Card effect: ${card.text}. Paid $${totalCost}.`, -totalCost, currentPlayer.id, 'BANK', null, card.id);
-        }
-
-        if (effectTransaction) {
-          newState.log.push(effectTransaction);
-        }
-        newState.phase = 'NORMAL';
-        break;
-      }
-
-      case 'GO_TO_JAIL': {
-        currentPlayer.position = 10;
-        currentPlayer.inJail = true;
-        currentPlayer.jailTurns = 0;
-        newState.phase = 'IN_JAIL_DECISION';
-        transaction = createTransaction('GO_TO_JAIL', 'Sent to jail.', null, currentPlayer.id);
-        break;
-      }
-
-      case 'JAIL_PAY_FINE': {
-        if (!currentPlayer.inJail) {
-          return { success: false, error: 'Not in jail' };
-        }
-        if (currentPlayer.balance < newState.settings.jailFine) {
-          return { success: false, error: 'Insufficient funds' };
-        }
-
-        currentPlayer.balance -= newState.settings.jailFine;
-        currentPlayer.inJail = false;
-        currentPlayer.jailTurns = 0;
-        currentPlayer.position = 10;
-        newState.phase = 'NORMAL';
-        transaction = createTransaction('JAIL_PAY_FINE', `Paid $${newState.settings.jailFine} to leave jail.`, -newState.settings.jailFine, currentPlayer.id, 'BANK');
-        break;
-      }
-
-      case 'JAIL_USE_CARD': {
-        if (!currentPlayer.inJail) {
-          return { success: false, error: 'Not in jail' };
-        }
-
-        if (action.cardType === 'CHANCE' && !currentPlayer.getOutOfJailFreeChance) {
-          return { success: false, error: 'No Get Out of Jail Free (Chance) card' };
-        }
-        if (action.cardType === 'COMMUNITY_CHEST' && !currentPlayer.getOutOfJailFreeChest) {
-          return { success: false, error: 'No Get Out of Jail Free (Community Chest) card' };
-        }
-
-        if (action.cardType === 'CHANCE') {
-          currentPlayer.getOutOfJailFreeChance = false;
-        } else {
-          currentPlayer.getOutOfJailFreeChest = false;
-        }
-
-        currentPlayer.inJail = false;
-        currentPlayer.jailTurns = 0;
-        currentPlayer.position = 10;
-        newState.phase = 'NORMAL';
-        transaction = createTransaction('JAIL_USE_CARD', `Used Get Out of Jail Free (${action.cardType === 'CHANCE' ? 'Chance' : 'Community Chest'}) card.`, null, currentPlayer.id);
+        const propData = action.propertyId ? getPropertyData(newState, action.propertyId) : null;
+        const propertyName = propData ? propData.name : 'property';
+        transaction = createTransaction('PAY_RENT', `${toPlayer.name} paid $${action.amount} rent to ${fromPlayer.name}${propData ? ` for ${propertyName}` : ''}.`, -action.amount, action.toPlayerId, action.fromPlayerId, action.propertyId || null);
         break;
       }
 
@@ -399,7 +97,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
           return { success: false, error: 'Must sell all houses/hotel before mortgaging' };
         }
 
-        const propData = getPropertyData(action.propertyId);
+        const propData = getPropertyData(newState, action.propertyId);
         if (!propData) {
           return { success: false, error: 'Property data not found' };
         }
@@ -419,7 +117,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
           return { success: false, error: 'Property not mortgaged' };
         }
 
-        const propData = getPropertyData(action.propertyId);
+        const propData = getPropertyData(newState, action.propertyId);
         if (!propData) {
           return { success: false, error: 'Property data not found' };
         }
@@ -436,24 +134,25 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       }
 
       case 'BUY_HOUSE': {
-        if (!canBuildHouse(newState, action.propertyId, currentPlayer.id)) {
-          return { success: false, error: 'Cannot build house on this property' };
-        }
-
-        const propData = getPropertyData(action.propertyId);
         const propState = getPropertyState(newState, action.propertyId);
-        
-        if (!propData || !propState) {
-          return { success: false, error: 'Property not found' };
+        if (!propState || propState.ownerId !== currentPlayer.id) {
+          return { success: false, error: 'Property not owned by current player' };
+        }
+        if (propState.hotel) {
+          return { success: false, error: 'Cannot build house on property with hotel' };
+        }
+        if (propState.houses >= 4) {
+          return { success: false, error: 'Maximum 4 houses allowed' };
         }
 
-        if (currentPlayer.balance < propData.houseCost) {
+        if (currentPlayer.balance < action.cost) {
           return { success: false, error: 'Insufficient funds' };
         }
 
-        currentPlayer.balance -= propData.houseCost;
+        currentPlayer.balance -= action.cost;
         propState.houses += 1;
-        transaction = createTransaction('BUY_HOUSE', `Bought house on ${propData.name} for $${propData.houseCost}.`, -propData.houseCost, currentPlayer.id, 'BANK', action.propertyId);
+        const propData = getPropertyData(newState, action.propertyId);
+        transaction = createTransaction('BUY_HOUSE', `Bought house on ${propData?.name || action.propertyId} for $${action.cost}.`, -action.cost, currentPlayer.id, 'BANK', action.propertyId);
         break;
       }
 
@@ -466,12 +165,13 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
           return { success: false, error: 'No houses to sell' };
         }
 
-        const propData = getPropertyData(action.propertyId);
+        const propData = getPropertyData(newState, action.propertyId);
         if (!propData) {
           return { success: false, error: 'Property data not found' };
         }
 
-        const sellPrice = Math.floor(propData.houseCost / 2);
+        // Need to know original house cost - use a default or store it
+        const sellPrice = propData.houseCost > 0 ? Math.floor(propData.houseCost / 2) : 25; // Default to $25 if not set
         currentPlayer.balance += sellPrice;
         propState.houses -= 1;
         transaction = createTransaction('SELL_HOUSE', `Sold house on ${propData.name} for $${sellPrice}.`, sellPrice, 'BANK', currentPlayer.id, action.propertyId);
@@ -479,25 +179,26 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       }
 
       case 'BUY_HOTEL': {
-        if (!canBuildHotel(newState, action.propertyId, currentPlayer.id)) {
-          return { success: false, error: 'Cannot build hotel on this property' };
-        }
-
-        const propData = getPropertyData(action.propertyId);
         const propState = getPropertyState(newState, action.propertyId);
-        
-        if (!propData || !propState) {
-          return { success: false, error: 'Property not found' };
+        if (!propState || propState.ownerId !== currentPlayer.id) {
+          return { success: false, error: 'Property not owned by current player' };
+        }
+        if (propState.houses !== 4) {
+          return { success: false, error: 'Must have 4 houses before building hotel' };
+        }
+        if (propState.hotel) {
+          return { success: false, error: 'Hotel already built' };
         }
 
-        if (currentPlayer.balance < propData.hotelCost) {
+        if (currentPlayer.balance < action.cost) {
           return { success: false, error: 'Insufficient funds' };
         }
 
-        currentPlayer.balance -= propData.hotelCost;
+        currentPlayer.balance -= action.cost;
         propState.houses = 0;
         propState.hotel = true;
-        transaction = createTransaction('BUY_HOTEL', `Bought hotel on ${propData.name} for $${propData.hotelCost}.`, -propData.hotelCost, currentPlayer.id, 'BANK', action.propertyId);
+        const propData = getPropertyData(newState, action.propertyId);
+        transaction = createTransaction('BUY_HOTEL', `Bought hotel on ${propData?.name || action.propertyId} for $${action.cost}.`, -action.cost, currentPlayer.id, 'BANK', action.propertyId);
         break;
       }
 
@@ -510,12 +211,12 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
           return { success: false, error: 'No hotel to sell' };
         }
 
-        const propData = getPropertyData(action.propertyId);
+        const propData = getPropertyData(newState, action.propertyId);
         if (!propData) {
           return { success: false, error: 'Property data not found' };
         }
 
-        const sellPrice = Math.floor(propData.hotelCost / 2);
+        const sellPrice = propData.hotelCost > 0 ? Math.floor(propData.hotelCost / 2) : 50; // Default to $50 if not set
         currentPlayer.balance += sellPrice;
         propState.hotel = false;
         propState.houses = 4;
@@ -583,29 +284,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
           }
         }
 
-        // Transfer cards
-        for (const card of action.cardsFrom) {
-          if (card.type === 'CHANCE') {
-            fromPlayer.getOutOfJailFreeChance = false;
-            toPlayer.getOutOfJailFreeChance = true;
-          } else {
-            fromPlayer.getOutOfJailFreeChest = false;
-            toPlayer.getOutOfJailFreeChest = true;
-          }
-        }
-
-        for (const card of action.cardsTo) {
-          if (card.type === 'CHANCE') {
-            toPlayer.getOutOfJailFreeChance = false;
-            fromPlayer.getOutOfJailFreeChance = true;
-          } else {
-            toPlayer.getOutOfJailFreeChest = false;
-            fromPlayer.getOutOfJailFreeChest = true;
-          }
-        }
-
         transaction = createTransaction('TRADE_EXECUTE', `Trade between ${fromPlayer.name} and ${toPlayer.name}`, null, action.fromPlayerId, action.toPlayerId);
-        newState.phase = 'NORMAL';
         break;
       }
 
@@ -693,25 +372,13 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
         }
 
         newState.phase = 'NORMAL';
-        newState.lastDiceRoll = null;
         transaction = createTransaction('END_TURN', `Turn ended. Next player: ${getCurrentPlayer(newState).name}`, null);
-        break;
-      }
-
-      case 'MANUAL_POSITION': {
-        const player = newState.players.find(p => p.id === action.playerId);
-        if (!player) {
-          return { success: false, error: 'Player not found' };
-        }
-
-        player.position = action.position;
-        transaction = createTransaction('MANUAL_POSITION', `Manually set ${player.name} position to ${action.position}.`, null, action.playerId);
         break;
       }
 
       case 'MANUAL_OWNERSHIP': {
         const propState = getPropertyState(newState, action.propertyId);
-        const propData = getPropertyData(action.propertyId);
+        const propData = getPropertyData(newState, action.propertyId);
         
         if (!propState || !propData) {
           return { success: false, error: 'Property not found' };

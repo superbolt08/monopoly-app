@@ -46,11 +46,6 @@ export interface Player {
   id: string;
   name: string;
   balance: number;
-  position: number; // 0-39
-  inJail: boolean;
-  jailTurns: number; // 0-3
-  getOutOfJailFreeChance: boolean;
-  getOutOfJailFreeChest: boolean;
   ownedPropertyIds: string[];
   isBankrupt: boolean;
 }
@@ -100,17 +95,10 @@ export interface GameState {
   currentTurnIndex: number;
   turnNumber: number;
   phase: GamePhase;
-  board: BoardDefinition;
   propertyStates: Record<string, PropertyState>;
-  chanceDeck: Card[];
-  chanceDiscard: Card[];
-  chestDeck: Card[];
-  chestDiscard: Card[];
-  bankCash: number;
-  freeParkingPot: number;
+  propertyData: Record<string, PropertyData>; // Store property data with prices
   log: Transaction[];
   history: GameStateSnapshot[];
-  lastDiceRoll: [number, number] | null;
 }
 
 export interface GameStateSnapshot {
@@ -134,14 +122,14 @@ export interface BoardSpace {
 export interface PropertyData {
   id: string;
   name: string;
-  price: number;
-  rent: number;
-  rentWithHouses: number[]; // [1 house, 2 houses, 3 houses, 4 houses]
+  price: number; // Set when buying
+  rent: number; // Not used - rent is manual
+  rentWithHouses: number[];
   rentWithHotel: number;
   houseCost: number;
   hotelCost: number;
   group: string;
-  mortgageValue: number;
+  mortgageValue: number; // Calculated as 50% of price
 }
 
 export interface PropertyGroup {
