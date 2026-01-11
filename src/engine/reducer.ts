@@ -23,6 +23,30 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
     let transaction: Transaction | null = null;
 
     switch (action.type) {
+      case 'PASS_GO': {
+        currentPlayer.balance += newState.settings.passGoAmount;
+        transaction = createTransaction('PASS_GO', `Passed GO. Collected $${newState.settings.passGoAmount}.`, newState.settings.passGoAmount, 'BANK', currentPlayer.id);
+        break;
+      }
+
+      case 'ENTER_JAIL': {
+        if (currentPlayer.inJail) {
+          return { success: false, error: 'Player is already in jail' };
+        }
+        currentPlayer.inJail = true;
+        transaction = createTransaction('ENTER_JAIL', `${currentPlayer.name} entered jail.`, null, currentPlayer.id);
+        break;
+      }
+
+      case 'LEAVE_JAIL': {
+        if (!currentPlayer.inJail) {
+          return { success: false, error: 'Player is not in jail' };
+        }
+        currentPlayer.inJail = false;
+        transaction = createTransaction('LEAVE_JAIL', `${currentPlayer.name} left jail.`, null, currentPlayer.id);
+        break;
+      }
+
       case 'BUY_PROPERTY': {
         const existingState = getPropertyState(newState, action.propertyId);
         

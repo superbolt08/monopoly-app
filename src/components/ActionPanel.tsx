@@ -142,6 +142,34 @@ export default function ActionPanel({ gameState, onAction, onShowPropertyManager
           </div>
         </div>
 
+        {/* Turn Actions */}
+        <div className="border-b pb-4">
+          <h4 className="font-semibold mb-2">Turn Actions</h4>
+          <div className="space-y-2">
+            <button
+              onClick={() => onAction({ type: 'PASS_GO' })}
+              className="w-full bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700"
+            >
+              Pass GO (+${gameState.settings.passGoAmount})
+            </button>
+            {!currentPlayer.inJail ? (
+              <button
+                onClick={() => onAction({ type: 'ENTER_JAIL' })}
+                className="w-full bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700"
+              >
+                Enter Jail
+              </button>
+            ) : (
+              <button
+                onClick={() => onAction({ type: 'LEAVE_JAIL' })}
+                className="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+              >
+                Leave Jail
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Other Actions */}
         <div className="space-y-2">
           <button

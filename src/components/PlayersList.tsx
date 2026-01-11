@@ -26,6 +26,9 @@ export default function PlayersList({ gameState }: PlayersListProps) {
                 <p className="font-semibold">{player.name}</p>
                 <p className="text-sm text-gray-600">Balance: ${player.balance}</p>
                 <p className="text-sm text-gray-600">Properties: {player.ownedPropertyIds.length}</p>
+                {player.inJail && (
+                  <p className="text-sm text-orange-600">In Jail</p>
+                )}
                 {player.isBankrupt && (
                   <p className="text-sm text-red-600">Bankrupt</p>
                 )}

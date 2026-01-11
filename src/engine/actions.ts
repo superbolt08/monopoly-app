@@ -1,6 +1,9 @@
 import type { GameState, TransactionType } from '../types';
 
 export type GameAction =
+  | { type: 'PASS_GO' }
+  | { type: 'ENTER_JAIL' }
+  | { type: 'LEAVE_JAIL' }
   | { type: 'BUY_PROPERTY'; propertyId: string; price: number }
   | { type: 'COLLECT_RENT'; fromPlayerId: string; toPlayerId: string; amount: number; propertyId?: string }
   | { type: 'TRADE_EXECUTE'; fromPlayerId: string; toPlayerId: string; cashFrom: number; cashTo: number; propertiesFrom: string[]; propertiesTo: string[] }

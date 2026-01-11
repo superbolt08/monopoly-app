@@ -38,7 +38,7 @@ export default function Setup({ onComplete }: SetupProps) {
     }
 
     const gameState = createInitialGameState(
-      validPlayers.map(p => ({ name: p.name, balance: 0, ownedPropertyIds: [], isBankrupt: false })),
+      validPlayers.map(p => ({ name: p.name, balance: 0, ownedPropertyIds: [], isBankrupt: false, inJail: false })),
       settings
     );
     setGameState(gameState);

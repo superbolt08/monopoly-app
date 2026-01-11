@@ -15,6 +15,8 @@ export type TransactionType =
   | 'DRAW_CARD'
   | 'APPLY_CARD_EFFECT'
   | 'GO_TO_JAIL'
+  | 'ENTER_JAIL'
+  | 'LEAVE_JAIL'
   | 'JAIL_PAY_FINE'
   | 'JAIL_USE_CARD'
   | 'JAIL_ROLL_ATTEMPT'
@@ -48,6 +50,7 @@ export interface Player {
   balance: number;
   ownedPropertyIds: string[];
   isBankrupt: boolean;
+  inJail: boolean;
 }
 
 export interface PropertyState {

@@ -23,6 +23,7 @@ export function createInitialGameState(players: Omit<Player, 'id'>[], settings?:
     balance: gameSettings.startingCash,
     ownedPropertyIds: [],
     isBankrupt: false,
+    inJail: false,
   }));
 
   // Initialize property states (all unowned)

@@ -68,6 +68,9 @@ export default function Dashboard() {
             <div>
               <h2 className="text-xl font-bold">{currentPlayer.name}'s Turn</h2>
               <p>Balance: ${currentPlayer.balance}</p>
+              {currentPlayer.inJail && (
+                <p className="text-yellow-300">In Jail</p>
+              )}
             </div>
             <div className="text-right">
               <p>Phase: {gameState.phase}</p>
