@@ -13,12 +13,14 @@ import { CHANCE_OUTCOMES, CHANCE_AMOUNTS } from '../data/chanceOutcomes';
 
 export function applyAction(state: GameState, action: GameAction): ActionResult {
   try {
-    const newState = cloneState(state);
+    // Clone state once - reuse the clone for history to avoid double cloning
+    const stateClone = cloneState(state);
+    const newState = stateClone;
     const currentPlayer = getCurrentPlayer(newState);
 
-    // Add to history before mutation
+    // Add to history before mutation (reuse the clone we already made)
     newState.history.push({
-      state: cloneState(state),
+      state: stateClone,
       timestamp: Date.now(),
     });
 
@@ -723,9 +725,14 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       newState.log.push(transaction);
     }
 
-    // Limit history size
-    if (newState.history.length > 100) {
-      newState.history = newState.history.slice(-100);
+    // Limit transaction log size to prevent memory issues
+    if (newState.log.length > 500) {
+      newState.log = newState.log.slice(-500);
+    }
+
+    // Limit history size (reduce from 100 to 50 to save memory)
+    if (newState.history.length > 50) {
+      newState.history = newState.history.slice(-50);
     }
 
     return { success: true, state: newState };

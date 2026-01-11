@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, memo } from 'react';
 import type { GameState } from '../types';
 import type { GameAction } from '../engine/actions';
 import { getCurrentPlayer } from '../engine/utils';
@@ -12,7 +12,7 @@ interface ActionPanelProps {
   onShowTrade: () => void;
 }
 
-export default function ActionPanel({ gameState, onAction, onShowPropertyManager, onShowTrade }: ActionPanelProps) {
+function ActionPanel({ gameState, onAction, onShowPropertyManager, onShowTrade }: ActionPanelProps) {
   const currentPlayer = getCurrentPlayer(gameState);
   const [selectedProperty, setSelectedProperty] = useState<string>('');
   const [buyPrice, setBuyPrice] = useState<number>(0);
@@ -20,10 +20,13 @@ export default function ActionPanel({ gameState, onAction, onShowPropertyManager
   const [rentAmount, setRentAmount] = useState<number>(0);
   const [rentProperty, setRentProperty] = useState<string>('');
 
-  const availableProperties = PROPERTIES.filter(prop => {
-    const propState = getPropertyState(gameState, prop.id);
-    return !propState || !propState.ownerId;
-  });
+  // Memoize available properties to avoid recalculating on every render
+  const availableProperties = useMemo(() => {
+    return PROPERTIES.filter(prop => {
+      const propState = getPropertyState(gameState, prop.id);
+      return !propState || !propState.ownerId;
+    });
+  }, [gameState.propertyStates]);
 
   const handleBuyProperty = () => {
     if (!selectedProperty) {
@@ -220,3 +223,5 @@ export default function ActionPanel({ gameState, onAction, onShowPropertyManager
     </div>
   );
 }
+
+export default memo(ActionPanel);

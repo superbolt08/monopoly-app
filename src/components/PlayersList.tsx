@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { GameState } from '../types';
 import { getCurrentPlayer } from '../engine/utils';
 
@@ -5,7 +6,7 @@ interface PlayersListProps {
   gameState: GameState;
 }
 
-export default function PlayersList({ gameState }: PlayersListProps) {
+function PlayersList({ gameState }: PlayersListProps) {
   const currentPlayer = getCurrentPlayer(gameState);
 
   return (
@@ -43,3 +44,5 @@ export default function PlayersList({ gameState }: PlayersListProps) {
     </div>
   );
 }
+
+export default memo(PlayersList);

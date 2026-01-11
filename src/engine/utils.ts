@@ -42,6 +42,10 @@ export function createTransaction(
   };
 }
 
+// Optimized cloning - use structuredClone if available (faster than JSON), fallback to JSON
 export function cloneState(state: GameState): GameState {
+  if (typeof structuredClone !== 'undefined') {
+    return structuredClone(state);
+  }
   return JSON.parse(JSON.stringify(state));
 }
