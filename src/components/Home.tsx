@@ -1,5 +1,6 @@
 import { useGameStore } from '../store/gameStore';
 import type { GameState } from '../types';
+import { getBackups } from '../utils/backup';
 
 interface HomeProps {
   onNewGame: () => void;
@@ -49,6 +50,38 @@ export default function Home({ onNewGame }: HomeProps) {
     }
   };
 
+  const handleRecoverBackup = () => {
+    const backups = getBackups();
+    if (backups.length === 0) {
+      alert('No backup saves found');
+      return;
+    }
+
+    // Show backup selection dialog
+    const backupList = backups
+      .map((b, i) => {
+        const date = new Date(b.timestamp);
+        return `${i + 1}. ${date.toLocaleString()} (Game ID: ${b.gameId.substring(0, 8)}...)`;
+      })
+      .join('\n');
+
+    const choice = prompt(
+      `Found ${backups.length} backup(s). Enter number to restore (1-${backups.length}):\n\n${backupList}`
+    );
+
+    if (choice) {
+      const index = parseInt(choice) - 1;
+      if (index >= 0 && index < backups.length) {
+        const selectedBackup = backups[index];
+        if (confirm(`Restore backup from ${new Date(selectedBackup.timestamp).toLocaleString()}?`)) {
+          setGameState(selectedBackup.state);
+        }
+      } else {
+        alert('Invalid selection');
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
@@ -71,6 +104,12 @@ export default function Home({ onNewGame }: HomeProps) {
             className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition"
           >
             Resume Last Game
+          </button>
+          <button
+            onClick={handleRecoverBackup}
+            className="w-full bg-orange-600 text-white py-3 px-4 rounded-lg hover:bg-orange-700 transition"
+          >
+            Recover from Backup
           </button>
         </div>
       </div>

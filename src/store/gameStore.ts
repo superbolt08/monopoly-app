@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { GameState, GameAction } from '../types';
 import { applyAction } from '../engine/reducer';
 import type { ActionResult } from '../engine/actions';
+import { saveBackup } from '../utils/backup';
 
 interface GameStore {
   gameState: GameState | null;
@@ -19,6 +20,11 @@ export const useGameStore = create<GameStore>()(
       gameState: null,
       error: null,
       setGameState: (state: GameState) => {
+        // Save backup before setting new state
+        const currentState = get().gameState;
+        if (currentState) {
+          saveBackup(currentState);
+        }
         set({ gameState: state, error: null });
       },
       dispatch: async (action: GameAction) => {
@@ -28,6 +34,9 @@ export const useGameStore = create<GameStore>()(
           set({ error });
           return { success: false, error };
         }
+
+        // Save backup before applying action
+        saveBackup(gameState);
 
         const result = applyAction(gameState, action);
         if (result.success && result.state) {

@@ -13,6 +13,19 @@ import { CHANCE_OUTCOMES, CHANCE_AMOUNTS } from '../data/chanceOutcomes';
 
 export function applyAction(state: GameState, action: GameAction): ActionResult {
   try {
+    // Handle UNDO_LAST separately - don't add to history
+    if (action.type === 'UNDO_LAST') {
+      if (state.history.length === 0) {
+        return { success: false, error: 'No history to undo' };
+      }
+
+      const previousState = state.history[state.history.length - 1].state;
+      // Clone the previous state and remove the undone state from its history
+      const restoredState = cloneState(previousState);
+      restoredState.history = state.history.slice(0, -1);
+      return { success: true, state: restoredState };
+    }
+
     // Clone state once - reuse the clone for history to avoid double cloning
     const stateClone = cloneState(state);
     const newState = stateClone;
@@ -714,15 +727,6 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
         break;
       }
 
-      case 'UNDO_LAST': {
-        if (newState.history.length === 0) {
-          return { success: false, error: 'No history to undo' };
-        }
-
-        const previousState = newState.history[newState.history.length - 1].state;
-        previousState.history = newState.history.slice(0, -1); // Remove the undone state from history
-        return { success: true, state: previousState };
-      }
 
       default:
         return { success: false, error: `Unknown action: ${(action as any).type}` };
