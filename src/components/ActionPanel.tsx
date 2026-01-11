@@ -170,6 +170,31 @@ export default function ActionPanel({ gameState, onAction, onShowPropertyManager
           </div>
         </div>
 
+        {/* Events */}
+        <div className="border-b pb-4">
+          <h4 className="font-semibold mb-2">Events</h4>
+          <div className="space-y-2">
+            <button
+              onClick={() => onAction({ type: 'TRAIN_EVENT_TRIGGER' })}
+              className="w-full bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+            >
+              Train Event
+            </button>
+            <button
+              onClick={() => onAction({ type: 'CHANCE_EVENT_TRIGGER' })}
+              className="w-full bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700"
+            >
+              Chance Event
+            </button>
+            <button
+              onClick={() => onAction({ type: 'FREE_PARKING_EVENT_TRIGGER' })}
+              className="w-full bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700"
+            >
+              Free Parking Event
+            </button>
+          </div>
+        </div>
+
         {/* Other Actions */}
         <div className="space-y-2">
           <button

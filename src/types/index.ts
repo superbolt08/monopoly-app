@@ -32,7 +32,10 @@ export type TransactionType =
   | 'DECLARE_BANKRUPTCY'
   | 'END_TURN'
   | 'MANUAL_POSITION'
-  | 'MANUAL_OWNERSHIP';
+  | 'MANUAL_OWNERSHIP'
+  | 'TRAIN_EVENT'
+  | 'CHANCE_EVENT'
+  | 'FREE_PARKING_EVENT';
 
 export interface GameSettings {
   startingCash: number;
@@ -102,6 +105,10 @@ export interface GameState {
   propertyData: Record<string, PropertyData>; // Store property data with prices
   log: Transaction[];
   history: GameStateSnapshot[];
+  // Event states
+  trainEventProperty?: string | null; // Selected property for train event
+  chanceEventOutcome?: string | null; // Selected chance outcome
+  freeParkingPrize?: { type: 'cash' | 'property'; amount?: number; propertyId?: string } | null;
 }
 
 export interface GameStateSnapshot {

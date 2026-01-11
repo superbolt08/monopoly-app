@@ -7,6 +7,9 @@ import PlayersList from './PlayersList';
 import TransactionLog from './TransactionLog';
 import PropertyManager from './PropertyManager';
 import TradeModal from './TradeModal';
+import TrainEventModal from './TrainEventModal';
+import ChanceEventModal from './ChanceEventModal';
+import FreeParkingEventModal from './FreeParkingEventModal';
 
 export default function Dashboard() {
   const gameState = useGameStore((state) => state.gameState);
@@ -119,6 +122,36 @@ export default function Dashboard() {
         <TradeModal
           gameState={gameState}
           onClose={() => setShowTrade(false)}
+          onAction={handleAction}
+        />
+      )}
+
+      {gameState.trainEventProperty && (
+        <TrainEventModal
+          gameState={gameState}
+          onClose={() => {
+            // Event will be cleared when action is applied
+          }}
+          onAction={handleAction}
+        />
+      )}
+
+      {gameState.chanceEventOutcome && (
+        <ChanceEventModal
+          gameState={gameState}
+          onClose={() => {
+            // Event will be cleared when action is applied
+          }}
+          onAction={handleAction}
+        />
+      )}
+
+      {gameState.freeParkingPrize && (
+        <FreeParkingEventModal
+          gameState={gameState}
+          onClose={() => {
+            // Event will be cleared when action is applied
+          }}
           onAction={handleAction}
         />
       )}

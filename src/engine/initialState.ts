@@ -52,5 +52,8 @@ export function createInitialGameState(players: Omit<Player, 'id'>[], settings?:
     propertyData,
     log: [],
     history: [],
+    trainEventProperty: null,
+    chanceEventOutcome: null,
+    freeParkingPrize: null,
   };
 }

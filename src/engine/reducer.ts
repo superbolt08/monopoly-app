@@ -8,6 +8,8 @@ import {
   createTransaction,
   cloneState,
 } from './utils';
+import { PROPERTIES } from '../data/properties';
+import { CHANCE_OUTCOMES, CHANCE_AMOUNTS } from '../data/chanceOutcomes';
 
 export function applyAction(state: GameState, action: GameAction): ActionResult {
   try {
@@ -426,6 +428,280 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
         }
 
         transaction = createTransaction('MANUAL_OWNERSHIP', `Manually set ownership of ${propData.name}.`, null, null, null, action.propertyId);
+        break;
+      }
+
+      case 'TRAIN_EVENT_TRIGGER': {
+        // Randomly select a property
+        const randomIndex = Math.floor(Math.random() * PROPERTIES.length);
+        const selectedProperty = PROPERTIES[randomIndex];
+        newState.trainEventProperty = selectedProperty.id;
+        transaction = createTransaction('TRAIN_EVENT', `Train Event: Selected property ${selectedProperty.name}`, null, currentPlayer.id);
+        break;
+      }
+
+      case 'TRAIN_EVENT_BUY': {
+        if (!newState.trainEventProperty) {
+          return { success: false, error: 'No train event property selected' };
+        }
+        // Use the same logic as BUY_PROPERTY
+        const existingState = getPropertyState(newState, action.propertyId);
+        if (existingState && existingState.ownerId) {
+          return { success: false, error: 'Property already owned' };
+        }
+        if (currentPlayer.balance < action.price) {
+          return { success: false, error: 'Insufficient funds' };
+        }
+        if (newState.propertyData[action.propertyId]) {
+          newState.propertyData[action.propertyId].price = action.price;
+          newState.propertyData[action.propertyId].mortgageValue = Math.floor(action.price * 0.5);
+        }
+        currentPlayer.balance -= action.price;
+        currentPlayer.ownedPropertyIds.push(action.propertyId);
+        if (!newState.propertyStates[action.propertyId]) {
+          newState.propertyStates[action.propertyId] = {
+            propertyId: action.propertyId,
+            ownerId: currentPlayer.id,
+            mortgaged: false,
+            houses: 0,
+            hotel: false,
+          };
+        } else {
+          newState.propertyStates[action.propertyId].ownerId = currentPlayer.id;
+        }
+        const propData = getPropertyData(newState, action.propertyId);
+        transaction = createTransaction('TRAIN_EVENT', `Train Event: Bought ${propData?.name || action.propertyId} for $${action.price}`, -action.price, currentPlayer.id, 'BANK', action.propertyId);
+        newState.trainEventProperty = null;
+        break;
+      }
+
+      case 'TRAIN_EVENT_SKIP': {
+        if (!newState.trainEventProperty) {
+          return { success: false, error: 'No train event property selected' };
+        }
+        const propData = getPropertyData(newState, newState.trainEventProperty);
+        transaction = createTransaction('TRAIN_EVENT', `Train Event: Skipped buying ${propData?.name || newState.trainEventProperty}`, null, currentPlayer.id);
+        newState.trainEventProperty = null;
+        break;
+      }
+
+      case 'TRAIN_EVENT_PAY_RENT': {
+        if (!newState.trainEventProperty) {
+          return { success: false, error: 'No train event property selected' };
+        }
+        const propState = getPropertyState(newState, action.propertyId);
+        if (!propState || !propState.ownerId) {
+          return { success: false, error: 'Property not owned' };
+        }
+        const owner = newState.players.find(p => p.id === propState.ownerId);
+        if (!owner) {
+          return { success: false, error: 'Owner not found' };
+        }
+        if (currentPlayer.balance < action.amount) {
+          return { success: false, error: 'Insufficient funds' };
+        }
+        currentPlayer.balance -= action.amount;
+        owner.balance += action.amount;
+        const propData = getPropertyData(newState, action.propertyId);
+        transaction = createTransaction('TRAIN_EVENT', `Train Event: Paid $${action.amount} rent for ${propData?.name || action.propertyId}`, -action.amount, currentPlayer.id, owner.id, action.propertyId);
+        newState.trainEventProperty = null;
+        break;
+      }
+
+      case 'CHANCE_EVENT_TRIGGER': {
+        // Randomly select one of 16 outcomes
+        const randomIndex = Math.floor(Math.random() * CHANCE_OUTCOMES.length);
+        const selectedOutcome = CHANCE_OUTCOMES[randomIndex];
+        newState.chanceEventOutcome = selectedOutcome.id;
+        transaction = createTransaction('CHANCE_EVENT', `Chance Event: ${selectedOutcome.name}`, null, currentPlayer.id);
+        break;
+      }
+
+      case 'CHANCE_EVENT_APPLY': {
+        if (!newState.chanceEventOutcome) {
+          return { success: false, error: 'No chance event outcome selected' };
+        }
+        const outcome = CHANCE_OUTCOMES.find(o => o.id === action.outcomeId);
+        if (!outcome) {
+          return { success: false, error: 'Outcome not found' };
+        }
+
+        let amount = action.amount || CHANCE_AMOUNTS[action.outcomeId] || 0;
+
+        switch (outcome.action) {
+          case 'receive':
+            currentPlayer.balance += amount;
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Received $${amount}`, amount, 'BANK', currentPlayer.id);
+            break;
+
+          case 'pay':
+            if (currentPlayer.balance < amount) {
+              return { success: false, error: 'Insufficient funds' };
+            }
+            currentPlayer.balance -= amount;
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Paid $${amount}`, -amount, currentPlayer.id, 'BANK');
+            break;
+
+          case 'receive_per_player':
+            if (!action.playerPayments) {
+              return { success: false, error: 'Player payments required' };
+            }
+            let totalReceived = 0;
+            for (const [playerId, payment] of Object.entries(action.playerPayments)) {
+              const otherPlayer = newState.players.find(p => p.id === playerId);
+              if (otherPlayer && otherPlayer.balance >= payment) {
+                otherPlayer.balance -= payment;
+                currentPlayer.balance += payment;
+                totalReceived += payment;
+              }
+            }
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Collected $${totalReceived} from other players`, totalReceived, null, currentPlayer.id);
+            break;
+
+          case 'pay_per_player':
+            if (!action.playerPayments) {
+              return { success: false, error: 'Player payments required' };
+            }
+            let totalPaid = 0;
+            for (const [playerId, payment] of Object.entries(action.playerPayments)) {
+              const otherPlayer = newState.players.find(p => p.id === playerId);
+              if (otherPlayer) {
+                if (currentPlayer.balance < payment) {
+                  return { success: false, error: 'Insufficient funds' };
+                }
+                currentPlayer.balance -= payment;
+                otherPlayer.balance += payment;
+                totalPaid += payment;
+              }
+            }
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Paid $${totalPaid} to other players`, -totalPaid, currentPlayer.id, null);
+            break;
+
+          case 'receive_property_upgrade':
+            if (!action.propertyId) {
+              return { success: false, error: 'Property selection required' };
+            }
+            if (!action.playerPayments) {
+              return { success: false, error: 'Player payments required' };
+            }
+            let upgradeTotal = 0;
+            for (const [playerId, payment] of Object.entries(action.playerPayments)) {
+              const otherPlayer = newState.players.find(p => p.id === playerId);
+              if (otherPlayer && otherPlayer.balance >= payment) {
+                otherPlayer.balance -= payment;
+                currentPlayer.balance += payment;
+                upgradeTotal += payment;
+              }
+            }
+            const upgradeProp = getPropertyData(newState, action.propertyId);
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Collected $${upgradeTotal} from other players for ${upgradeProp?.name || action.propertyId}`, upgradeTotal, null, currentPlayer.id, action.propertyId);
+            break;
+
+          case 'pay_property_repair':
+            if (!action.propertyId) {
+              return { success: false, error: 'Property selection required' };
+            }
+            if (currentPlayer.balance < amount) {
+              return { success: false, error: 'Insufficient funds' };
+            }
+            currentPlayer.balance -= amount;
+            const repairProp = getPropertyData(newState, action.propertyId);
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Paid $${amount} for repairs on ${repairProp?.name || action.propertyId}`, -amount, currentPlayer.id, 'BANK', action.propertyId);
+            break;
+
+          case 'tax_audit':
+            // Calculate 10% of current cash
+            amount = Math.floor(currentPlayer.balance * 0.1);
+            if (amount <= 0) {
+              return { success: false, error: 'No cash to tax' };
+            }
+            if (currentPlayer.balance < amount) {
+              return { success: false, error: 'Insufficient funds' };
+            }
+            currentPlayer.balance -= amount;
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Paid $${amount} (10% of cash)`, -amount, currentPlayer.id, 'BANK');
+            break;
+
+          case 'rent_reimbursement':
+            if (!amount || amount <= 0) {
+              return { success: false, error: 'Invalid reimbursement amount' };
+            }
+            currentPlayer.balance += amount;
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Reimbursed $${amount}`, amount, 'BANK', currentPlayer.id);
+            break;
+
+          case 'lucky_investment':
+            currentPlayer.balance += amount;
+            transaction = createTransaction('CHANCE_EVENT', `${outcome.name}: Received $${amount} now (reminder: +$100 at next turn)`, amount, 'BANK', currentPlayer.id);
+            break;
+        }
+
+        newState.chanceEventOutcome = null;
+        break;
+      }
+
+      case 'FREE_PARKING_EVENT_TRIGGER': {
+        // Generate random number 1-100
+        const roll = Math.floor(Math.random() * 100) + 1;
+        let prize: { type: 'cash' | 'property'; amount?: number; propertyId?: string };
+
+        if (roll <= 50) {
+          // 50% - 200M
+          prize = { type: 'cash', amount: 200 };
+        } else if (roll <= 70) {
+          // 20% - 400M
+          prize = { type: 'cash', amount: 400 };
+        } else if (roll <= 75) {
+          // 5% - 1000M
+          prize = { type: 'cash', amount: 1000 };
+        } else {
+          // 25% - Property prize
+          const randomPropIndex = Math.floor(Math.random() * PROPERTIES.length);
+          const selectedProperty = PROPERTIES[randomPropIndex];
+          prize = { type: 'property', propertyId: selectedProperty.id };
+        }
+
+        newState.freeParkingPrize = prize;
+        transaction = createTransaction('FREE_PARKING_EVENT', `Free Parking Event: Prize determined`, null, currentPlayer.id);
+        break;
+      }
+
+      case 'FREE_PARKING_EVENT_ACCEPT': {
+        if (!newState.freeParkingPrize) {
+          return { success: false, error: 'No free parking prize determined' };
+        }
+
+        const prize = newState.freeParkingPrize;
+
+        if (prize.type === 'cash') {
+          currentPlayer.balance += prize.amount || 0;
+          transaction = createTransaction('FREE_PARKING_EVENT', `Free Parking: Won $${prize.amount}`, prize.amount || 0, 'BANK', currentPlayer.id);
+        } else if (prize.type === 'property' && prize.propertyId) {
+          const propState = getPropertyState(newState, prize.propertyId);
+          if (propState && propState.ownerId) {
+            // Property is owned, convert to 400M cash
+            currentPlayer.balance += 400;
+            transaction = createTransaction('FREE_PARKING_EVENT', `Free Parking: Property prize converted to $400 cash`, 400, 'BANK', currentPlayer.id);
+          } else {
+            // Property is unowned, give it to player
+            if (!newState.propertyStates[prize.propertyId]) {
+              newState.propertyStates[prize.propertyId] = {
+                propertyId: prize.propertyId,
+                ownerId: currentPlayer.id,
+                mortgaged: false,
+                houses: 0,
+                hotel: false,
+              };
+            } else {
+              newState.propertyStates[prize.propertyId].ownerId = currentPlayer.id;
+            }
+            currentPlayer.ownedPropertyIds.push(prize.propertyId);
+            const propData = getPropertyData(newState, prize.propertyId);
+            transaction = createTransaction('FREE_PARKING_EVENT', `Free Parking: Won property ${propData?.name || prize.propertyId}`, null, 'BANK', currentPlayer.id, prize.propertyId);
+          }
+        }
+
+        newState.freeParkingPrize = null;
         break;
       }
 
